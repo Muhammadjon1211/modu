@@ -14,6 +14,12 @@ const OrderSchema = new Schema(
 		orderTotal: { type: Number, default: 0 },
 
 		memberId: { type: Schema.Types.ObjectId, required: true, ref: 'Member' }, // the buyer
+		/**
+		 * When the cart actually became an order. The return window runs from here,
+		 * never from createdAt — createdAt is when the cart was opened, and a cart
+		 * can sit untouched for weeks before checkout.
+		 */
+		purchasedAt: { type: Date },
 		deletedAt: { type: Date },
 	},
 	{ timestamps: true, collection: 'orders' },

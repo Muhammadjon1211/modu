@@ -8,6 +8,7 @@ import { LikeModule } from './like/like.module';
 import { ViewModule } from './view/view.module';
 import { FollowModule } from './follow/follow.module';
 import { OrderModule } from './order/order.module';
+import { ReturnModule } from './return/return.module';
 import { NoticeModule } from './notice/notice.module';
 
 /** Pure aggregator — AppModule imports this, never an individual feature. */
@@ -22,6 +23,7 @@ import { NoticeModule } from './notice/notice.module';
 		ViewModule,
 		FollowModule,
 		OrderModule,
+		ReturnModule,
 		NoticeModule,
 	],
 })

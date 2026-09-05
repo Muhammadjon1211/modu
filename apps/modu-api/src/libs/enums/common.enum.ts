@@ -32,6 +32,13 @@ export enum Message {
 	NOT_PURCHASED_PRODUCT = 'Only buyers of this product may review it!',
 	ALREADY_REVIEWED = 'You have already reviewed this product!',
 	INVALID_DISCOUNT = 'Discount must be between 0 and 99 percent!',
+
+	/** returns */
+	RETURN_WINDOW_EXPIRED = 'The return window for this order has closed!',
+	RETURN_NOT_ELIGIBLE = 'This order is not eligible for return!',
+	RETURN_QUANTITY_EXCEEDED = 'Return quantity exceeds what is left of this purchase!',
+	RETURN_NOT_UPDATABLE = 'This return can no longer move to that status!',
+	RETURN_NOT_CANCELLABLE = 'Only a pending return request can be cancelled!',
 }
 
 export enum Direction {

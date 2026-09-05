@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
+import moment from 'moment';
 import { Order, OrderItem, Orders } from '../../libs/dto/order/order';
 import { AllOrdersInquiry, OrderItemInput, OrdersInquiry } from '../../libs/dto/order/order.input';
 import { OrderUpdate } from '../../libs/dto/order/order.update';
@@ -121,7 +122,12 @@ export class OrderService {
 		}
 
 		const result = await this.orderModel
-			.findByIdAndUpdate(cart._id, { orderStatus: OrderStatus.PROCESS }, { new: true })
+			.findByIdAndUpdate(
+				cart._id,
+				// purchasedAt anchors the return window; createdAt is when the cart opened
+				{ orderStatus: OrderStatus.PROCESS, purchasedAt: moment().toDate() },
+				{ new: true },
+			)
 			.exec();
 		if (!result) throw new BadRequestException(Message.CREATE_FAILED);
 

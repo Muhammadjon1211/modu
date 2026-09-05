@@ -29,6 +29,14 @@ export const availableCommentSorts = ['createdAt', 'updatedAt'];
 
 export const availableOrderSorts = ['createdAt', 'updatedAt', 'orderTotal'];
 
+export const availableReturnSorts = ['createdAt', 'updatedAt', 'returnAmount'];
+
+/**
+ * How long after purchase a buyer may open a return.
+ * Change this in one place; every eligibility check reads it.
+ */
+export const RETURN_WINDOW_DAYS = 3;
+
 /** Boolean facets — the "options" checkbox group. */
 export const availableOptions = ['productOnSale', 'productFreeShipping', 'productNew'];
 
@@ -162,6 +170,11 @@ export const lookupOrderItems = {
 
 export const lookupOrderProducts = {
 	$lookup: { from: 'products', localField: 'orderItems.productId', foreignField: '_id', as: 'productData' },
+};
+
+/** the product a return is about, and the buyer who opened it */
+export const lookupReturnProduct = {
+	$lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'productData' },
 };
 
 /** Re-export the mongoose ObjectId type so DTOs import ids from one source. */

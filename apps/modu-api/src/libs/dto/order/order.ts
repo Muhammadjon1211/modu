@@ -39,6 +39,9 @@ export class Order {
 
 	@Field(() => String) memberId: ObjectId;
 
+	/** when the cart became an order — the return window runs from here */
+	@Field(() => Date, { nullable: true }) purchasedAt?: Date;
+
 	@Field(() => Date, { nullable: true }) deletedAt?: Date;
 
 	@Field(() => Date) createdAt: Date;
