@@ -1,0 +1,14 @@
+{
+	// Use the workspace TypeScript (5.5, pinned in package.json) rather than the
+	// editor's bundled compiler. Newer bundled versions flip strictness defaults on,
+	// which reports errors the actual build does not have.
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"typescript.enablePromptUseWorkspaceTsdk": true,
+
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"[typescript]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"files.eol": "\n"
+}
