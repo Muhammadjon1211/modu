@@ -29,6 +29,7 @@ export enum Message {
 	NOT_ENOUGH_STOCK = 'Requested quantity exceeds available stock!',
 	EMPTY_CART = 'Your cart is empty!',
 	ORDER_NOT_CANCELLABLE = 'This order can no longer be cancelled!',
+	ORDER_NOT_UPDATABLE = 'This order can no longer move to that status!',
 	NOT_PURCHASED_PRODUCT = 'Only buyers of this product may review it!',
 	ALREADY_REVIEWED = 'You have already reviewed this product!',
 	INVALID_DISCOUNT = 'Discount must be between 0 and 99 percent!',

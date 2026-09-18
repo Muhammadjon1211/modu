@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import moment from 'moment';
@@ -149,25 +149,9 @@ export class OrderService {
 	}
 
 	public async updateOrder(memberId: ObjectId, input: OrderUpdate): Promise<Order> {
-		const { _id, orderStatus } = input;
-		const target = await this.orderModel.findOne({ _id, memberId }).exec();
+		const target = await this.orderModel.findOne({ _id: input._id, memberId }).exec();
 		if (!target) throw new NotFoundException(Message.NO_DATA_FOUND);
-
-		if (orderStatus === OrderStatus.CANCEL) {
-			// only an order that has not shipped out of PROCESS may still be pulled back
-			if (target.orderStatus !== OrderStatus.PROCESS)
-				throw new BadRequestException(Message.ORDER_NOT_CANCELLABLE);
-			await this.restoreOrderStock(target._id);
-		} else if (orderStatus === OrderStatus.PROCESS) {
-			// checkout is createOrder's job; this endpoint may not mint an order
-			throw new ForbiddenException(Message.NOT_ALLOWED_REQUEST);
-		}
-
-		const result = await this.orderModel
-			.findByIdAndUpdate(target._id, { orderStatus }, { new: true })
-			.exec();
-		if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
-		return await this.readOrder(result._id);
+		return await this.applyTransition(target, input.orderStatus);
 	}
 
 	public async getMyOrders(memberId: ObjectId, input: OrdersInquiry): Promise<Orders> {
@@ -208,21 +192,43 @@ export class OrderService {
 	public async updateOrderByAdmin(input: OrderUpdate): Promise<Order> {
 		const target = await this.orderModel.findById(input._id).exec();
 		if (!target) throw new NotFoundException(Message.NO_DATA_FOUND);
-
-		if (input.orderStatus === OrderStatus.CANCEL && target.orderStatus === OrderStatus.PROCESS) {
-			await this.restoreOrderStock(target._id);
-		}
-
-		const result = await this.orderModel
-			.findByIdAndUpdate(target._id, { orderStatus: input.orderStatus }, { new: true })
-			.exec();
-		if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
-		return await this.readOrder(result._id);
+		return await this.applyTransition(target, input.orderStatus);
 	}
 
 	/* ---------------------------------------------------------------- */
 	/* internals                                                        */
 	/* ---------------------------------------------------------------- */
+
+	/**
+	 * The order state machine, shared by buyer and admin.
+	 * PAUSE only leaves through createOrder (which takes the stock); FINISH and CANCEL are terminal.
+	 * Without this, a cart or a cancelled order could be pushed to FINISH/PROCESS without
+	 * stock ever being taken — and then count as a purchase for reviews and refunds.
+	 */
+	private assertTransition(from: OrderStatus, to: OrderStatus): void {
+		const allowed: Record<OrderStatus, OrderStatus[]> = {
+			[OrderStatus.PAUSE]: [],
+			[OrderStatus.PROCESS]: [OrderStatus.FINISH, OrderStatus.CANCEL],
+			[OrderStatus.FINISH]: [],
+			[OrderStatus.CANCEL]: [],
+		};
+		if (allowed[from].includes(to)) return;
+		if (to === OrderStatus.CANCEL) throw new BadRequestException(Message.ORDER_NOT_CANCELLABLE);
+		throw new BadRequestException(Message.ORDER_NOT_UPDATABLE);
+	}
+
+	private async applyTransition(target: Order, orderStatus: OrderStatus): Promise<Order> {
+		this.assertTransition(target.orderStatus, orderStatus);
+
+		// conditional on the current status, so two concurrent cancels cannot both restock
+		const result = await this.orderModel
+			.findOneAndUpdate({ _id: target._id, orderStatus: target.orderStatus }, { orderStatus }, { new: true })
+			.exec();
+		if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
+
+		if (orderStatus === OrderStatus.CANCEL) await this.restoreOrderStock(target._id);
+		return await this.readOrder(result._id);
+	}
 
 	private async openCart(memberId: ObjectId): Promise<Order> {
 		const cart = await this.orderModel.findOne({ memberId, orderStatus: OrderStatus.PAUSE }).exec();

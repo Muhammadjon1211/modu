@@ -27,6 +27,9 @@ export class MemberService {
 	) {}
 
 	public async signup(input: MemberInput): Promise<Member> {
+		// self-registration may pick buyer or seller; an admin is only ever made by another admin
+		if (input.memberType === MemberType.ADMIN) throw new ForbiddenException(Message.NOT_ALLOWED_REQUEST);
+
 		input.memberPassword = await this.authService.hashPassword(input.memberPassword);
 		try {
 			const result = await this.memberModel.create(input);
@@ -169,6 +172,7 @@ export class MemberService {
 	}
 
 	public async updateMemberByAdmin(input: MemberUpdate): Promise<Member> {
+		if (input.memberPassword) input.memberPassword = await this.authService.hashPassword(input.memberPassword);
 		if (input.memberStatus === MemberStatus.DELETE) input.deletedAt = moment().toDate();
 
 		const result: Member | null = await this.memberModel

@@ -308,6 +308,23 @@ export class ProductService {
 			.exec();
 	}
 
+	/** the mirror image, used when a review is deleted */
+	public async productRatingRemover(productId: ObjectId, rating: number): Promise<Product | null> {
+		const target = await this.productModel.findById(productId).exec();
+		if (!target || target.productRatingCount <= 0) return null;
+
+		const count = target.productRatingCount - 1;
+		const average = count ? (target.productRating * target.productRatingCount - rating) / count : 0;
+
+		return await this.productModel
+			.findByIdAndUpdate(
+				productId,
+				{ productRatingCount: count, productRating: Math.max(0, Math.round(average * 100) / 100) },
+				{ new: true },
+			)
+			.exec();
+	}
+
 	/** ADMIN **/
 
 	public async getAllProductsByAdmin(input: AllProductsInquiry): Promise<Products> {

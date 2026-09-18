@@ -98,7 +98,39 @@ export class CommentService {
 			.findOneAndUpdate({ _id, memberId, commentStatus: CommentStatus.ACTIVE }, input, { new: true })
 			.exec();
 		if (!result) throw new NotFoundException(Message.UPDATE_FAILED);
+
+		// the filter only matches ACTIVE comments, so a delete here always releases exactly once
+		if (input.commentStatus === CommentStatus.DELETE) await this.releaseComment(result);
 		return result;
+	}
+
+	/** undo everything createComment added: the target's counter and, for a review, its rating */
+	private async releaseComment(comment: Comment): Promise<void> {
+		const { commentGroup, commentRefId, commentRating } = comment;
+		switch (commentGroup) {
+			case CommentGroup.PRODUCT:
+				await this.productService.productStatsEditor({
+					_id: commentRefId,
+					targetKey: 'productComments',
+					modifier: -1,
+				});
+				if (commentRating) await this.productService.productRatingRemover(commentRefId, commentRating);
+				break;
+			case CommentGroup.ARTICLE:
+				await this.boardArticleService.boardArticleStatsEditor({
+					_id: commentRefId,
+					targetKey: 'articleComments',
+					modifier: -1,
+				});
+				break;
+			case CommentGroup.MEMBER:
+				await this.memberService.memberStatsEditor({
+					_id: commentRefId,
+					targetKey: 'memberComments',
+					modifier: -1,
+				});
+				break;
+		}
 	}
 
 	public async getComments(memberId: ObjectId, input: CommentsInquiry): Promise<Comments> {
@@ -132,6 +164,9 @@ export class CommentService {
 	public async removeCommentByAdmin(commentId: ObjectId): Promise<Comment> {
 		const result = await this.commentModel.findByIdAndDelete(commentId).exec();
 		if (!result) throw new NotFoundException(Message.REMOVE_FAILED);
+
+		// a comment the author already soft-deleted was released at that point
+		if (result.commentStatus === CommentStatus.ACTIVE) await this.releaseComment(result);
 		return result;
 	}
 }
