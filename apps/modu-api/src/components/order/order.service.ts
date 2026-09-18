@@ -359,7 +359,7 @@ export class OrderService implements OnModuleInit {
 			.exec();
 		if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
 
-		if (orderStatus === OrderStatus.CANCEL) await this.restoreOrderStock(target._id);
+		if (orderStatus === OrderStatus.CANCEL) await this.reverseOrder(result);
 		return await this.readOrder(result._id);
 	}
 
@@ -444,11 +444,22 @@ export class OrderService implements OnModuleInit {
 			.exec();
 	}
 
-	private async restoreOrderStock(orderId: ObjectId): Promise<void> {
-		const lines = await this.orderItemModel.find({ orderId }).exec();
+	/** undoes what checkout did: stock back on the shelf, the sale off each shop, the points off the buyer */
+	private async reverseOrder(order: Order): Promise<void> {
+		const lines = await this.orderItemModel.find({ orderId: order._id }).exec();
 		for (const line of lines) {
 			await this.productService.restoreStock(line.productId, line.itemQuantity);
+			await this.memberService.memberStatsEditor({
+				_id: line.sellerId,
+				targetKey: 'memberSales',
+				modifier: -line.itemQuantity,
+			});
 		}
+		await this.memberService.memberStatsEditor({
+			_id: order.memberId,
+			targetKey: 'memberPoints',
+			modifier: -Math.floor(order.orderTotal / 1000),
+		});
 	}
 
 	private async readOrder(orderId: ObjectId): Promise<Order> {
