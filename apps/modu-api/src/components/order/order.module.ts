@@ -8,6 +8,8 @@ import { OrderService } from './order.service';
 import { AuthModule } from '../auth/auth.module';
 import { MemberModule } from '../member/member.module';
 import { ProductModule } from '../product/product.module';
+import { AddressModule } from '../address/address.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
 	imports: [
@@ -18,6 +20,8 @@ import { ProductModule } from '../product/product.module';
 		AuthModule,
 		MemberModule,
 		ProductModule,
+		AddressModule,
+		PaymentModule,
 	],
 	providers: [OrderResolver, OrderService],
 	exports: [OrderService],

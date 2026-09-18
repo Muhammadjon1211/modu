@@ -245,6 +245,11 @@ export class SellerProductsInquiry {
 
 @InputType()
 class ALPISearch {
+	/** narrows the list to one store */
+	@IsOptional()
+	@Field(() => String, { nullable: true })
+	memberId?: ObjectId;
+
 	@IsOptional()
 	@Field(() => ProductStatus, { nullable: true })
 	productStatus?: ProductStatus;

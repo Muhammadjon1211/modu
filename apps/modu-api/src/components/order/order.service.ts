@@ -1,24 +1,34 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { Model, ObjectId, PipelineStage } from 'mongoose';
 import moment from 'moment';
-import { Order, OrderItem, Orders } from '../../libs/dto/order/order';
-import { AllOrdersInquiry, OrderItemInput, OrdersInquiry } from '../../libs/dto/order/order.input';
+import { Order, OrderItem, Orders, StoreCustomers, StoreSummary } from '../../libs/dto/order/order';
+import {
+	AllOrdersInquiry,
+	CartItemUpdate,
+	OrderInput,
+	OrderItemInput,
+	OrdersInquiry,
+	StoreCustomersInquiry,
+} from '../../libs/dto/order/order.input';
+import { OrderShipping } from '../../libs/dto/address/address';
 import { OrderUpdate } from '../../libs/dto/order/order.update';
 import { Product } from '../../libs/dto/product/product';
 import { OrderStatus } from '../../libs/enums/order.enum';
-import { ProductStatus } from '../../libs/enums/product.enum';
+import { ProductColor, ProductSize, ProductStatus } from '../../libs/enums/product.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { T } from '../../libs/types/common';
 import { MemberService } from '../member/member.service';
 import { ProductService } from '../product/product.service';
-import { lookupOrderItems, lookupOrderProducts, shapeIntoMongoObjectId } from '../../libs/config';
+import { AddressService } from '../address/address.service';
+import { PaymentService, PaymentSnapshot } from '../payment/payment.service';
+import { lookupMember, lookupOrderItems, lookupOrderProducts, shapeIntoMongoObjectId } from '../../libs/config';
 
 /** flat rate for now — a delivery-rules engine is a later concern */
 const DELIVERY_FEE = 3000;
 
 @Injectable()
-export class OrderService {
+export class OrderService implements OnModuleInit {
 	constructor(
 		@InjectModel('Order') private readonly orderModel: Model<Order>,
 		@InjectModel('OrderItem') private readonly orderItemModel: Model<OrderItem>,
@@ -26,7 +36,17 @@ export class OrderService {
 		@InjectModel('Product') private readonly productModel: Model<Product>,
 		private readonly memberService: MemberService,
 		private readonly productService: ProductService,
+		private readonly addressService: AddressService,
+		private readonly paymentService: PaymentService,
 	) {}
+
+	/**
+	 * The line index used to be unique on (order, product); a product can now sit in the cart
+	 * in several sizes. syncIndexes drops the old unique index so the new one can take over.
+	 */
+	public async onModuleInit(): Promise<void> {
+		await this.orderItemModel.syncIndexes();
+	}
 
 	/** the cart — one open PAUSE order per member, created on first use */
 	public async getMyCart(memberId: ObjectId): Promise<Order> {
@@ -38,17 +58,18 @@ export class OrderService {
 	public async addToCart(memberId: ObjectId, input: OrderItemInput): Promise<Order> {
 		const cart = await this.openCart(memberId);
 		const product = await this.readSellableProduct(input.productId);
+		const variant = this.resolveVariant(product, input.itemSize, input.itemColor);
 
-		if (product.productStock < input.itemQuantity) throw new BadRequestException(Message.NOT_ENOUGH_STOCK);
+		// stock is per product, so every size of it in the cart counts against it
+		const inCart = await this.cartQuantityOf(cart._id, product._id);
+		if (product.productStock < inCart + input.itemQuantity) throw new BadRequestException(Message.NOT_ENOUGH_STOCK);
 
 		const existing = await this.orderItemModel
-			.findOne({ orderId: cart._id, productId: product._id })
+			.findOne({ orderId: cart._id, productId: product._id, ...variant })
 			.exec();
 
 		if (existing) {
-			const quantity = existing.itemQuantity + input.itemQuantity;
-			if (product.productStock < quantity) throw new BadRequestException(Message.NOT_ENOUGH_STOCK);
-			existing.itemQuantity = quantity;
+			existing.itemQuantity += input.itemQuantity;
 			// re-snapshot the price so an unsubmitted cart reflects the current one
 			existing.itemPrice = product.productPrice;
 			existing.itemDiscount = product.productDiscount;
@@ -61,6 +82,7 @@ export class OrderService {
 				itemQuantity: input.itemQuantity,
 				itemPrice: product.productPrice,
 				itemDiscount: product.productDiscount,
+				...variant,
 			});
 		}
 
@@ -68,10 +90,29 @@ export class OrderService {
 		return await this.readOrder(cart._id);
 	}
 
-	public async removeFromCart(memberId: ObjectId, productId: ObjectId): Promise<Order> {
+	/** sets a line's quantity outright — the cart page's stepper */
+	public async updateCartItem(memberId: ObjectId, input: CartItemUpdate): Promise<Order> {
+		const cart = await this.openCart(memberId);
+		const line = await this.orderItemModel.findOne({ _id: input.orderItemId, orderId: cart._id }).exec();
+		if (!line) throw new NotFoundException(Message.NO_DATA_FOUND);
+
+		const product = await this.readSellableProduct(line.productId);
+		const others = (await this.cartQuantityOf(cart._id, product._id)) - line.itemQuantity;
+		if (product.productStock < others + input.itemQuantity) throw new BadRequestException(Message.NOT_ENOUGH_STOCK);
+
+		line.itemQuantity = input.itemQuantity;
+		line.itemPrice = product.productPrice;
+		line.itemDiscount = product.productDiscount;
+		await line.save();
+
+		await this.recalculateTotals(cart._id);
+		return await this.readOrder(cart._id);
+	}
+
+	public async removeFromCart(memberId: ObjectId, orderItemId: ObjectId): Promise<Order> {
 		const cart = await this.openCart(memberId);
 
-		const removed = await this.orderItemModel.findOneAndDelete({ orderId: cart._id, productId }).exec();
+		const removed = await this.orderItemModel.findOneAndDelete({ _id: orderItemId, orderId: cart._id }).exec();
 		if (!removed) throw new NotFoundException(Message.NO_DATA_FOUND);
 
 		await this.recalculateTotals(cart._id);
@@ -79,34 +120,29 @@ export class OrderService {
 	}
 
 	/**
-	 * Checkout. Totals are recomputed from the live products — a client-supplied
-	 * price never reaches the database — and stock is taken with a conditional
-	 * decrement so two concurrent checkouts cannot oversell.
+	 * Checkout. The lines are the server-side cart; every one is re-validated and re-priced
+	 * from the live product, so neither prices nor variants are ever trusted from the client.
+	 * Stock is taken with a conditional decrement, so two concurrent checkouts cannot oversell.
+	 * Shipping and payment are resolved first — nothing is taken until both are valid.
 	 */
-	public async createOrder(memberId: ObjectId, input: OrderItemInput[]): Promise<Order> {
-		if (!input?.length) throw new BadRequestException(Message.EMPTY_CART);
-
+	public async createOrder(memberId: ObjectId, input: OrderInput): Promise<Order> {
 		const cart = await this.openCart(memberId);
-		await this.orderItemModel.deleteMany({ orderId: cart._id }).exec();
+		const lines = await this.orderItemModel.find({ orderId: cart._id }).exec();
+		if (!lines.length) throw new BadRequestException(Message.EMPTY_CART);
 
-		for (const item of input) {
-			const productId = shapeIntoMongoObjectId(item.productId);
-			const product = await this.readSellableProduct(productId);
+		const shipping = await this.resolveShipping(memberId, input);
+		const payment = await this.resolvePayment(memberId, input);
 
-			await this.orderItemModel.create({
-				orderId: cart._id,
-				productId: product._id,
-				sellerId: product.memberId,
-				itemQuantity: item.itemQuantity,
-				itemPrice: product.productPrice,
-				itemDiscount: product.productDiscount,
-			});
+		for (const line of lines) {
+			const product = await this.readSellableProduct(line.productId);
+			this.resolveVariant(product, line.itemSize as ProductSize, line.itemColor as ProductColor);
+			line.itemPrice = product.productPrice;
+			line.itemDiscount = product.productDiscount;
+			await line.save();
 		}
-
 		await this.recalculateTotals(cart._id);
 
 		// take the stock only once every line has been priced
-		const lines = await this.orderItemModel.find({ orderId: cart._id }).exec();
 		const taken: OrderItem[] = [];
 		try {
 			for (const line of lines) {
@@ -124,12 +160,30 @@ export class OrderService {
 		const result = await this.orderModel
 			.findByIdAndUpdate(
 				cart._id,
-				// purchasedAt anchors the return window; createdAt is when the cart opened
-				{ orderStatus: OrderStatus.PROCESS, purchasedAt: moment().toDate() },
+				{
+					orderStatus: OrderStatus.PROCESS,
+					// purchasedAt anchors the return window; createdAt is when the cart opened
+					purchasedAt: moment().toDate(),
+					orderShipping: shipping,
+					orderPayment: {
+						paymentType: payment.paymentType,
+						holderName: payment.holderName,
+						provider: payment.provider,
+						last4: payment.last4,
+					},
+				},
 				{ new: true },
 			)
 			.exec();
 		if (!result) throw new BadRequestException(Message.CREATE_FAILED);
+
+		// saved only after the order went through, so a failed checkout leaves nothing behind
+		if (!input.addressId && input.saveAddress && input.shipping) {
+			await this.addressService.createAddress({ ...input.shipping, memberId });
+		}
+		if (!input.paymentMethodId && input.savePayment && input.payment) {
+			await this.paymentService.createPaymentMethod(memberId, input.payment);
+		}
 
 		await this.memberService.memberStatsEditor({ _id: memberId, targetKey: 'memberOrders', modifier: 1 });
 		await this.memberService.memberStatsEditor({
@@ -185,8 +239,87 @@ export class OrderService {
 
 		if (input.search?.orderStatus) match.orderStatus = input.search.orderStatus;
 		if (input.search?.memberId) match.memberId = shapeIntoMongoObjectId(input.search.memberId);
+		if (input.search?.sellerId) {
+			const sellerId = shapeIntoMongoObjectId(input.search.sellerId);
+			const lines = await this.orderItemModel.find({ sellerId }).select('orderId').lean().exec();
+			match._id = { $in: lines.map((ele) => ele.orderId) };
+			// a store's sales list is not interested in carts that merely hold its items
+			if (!input.search.orderStatus) match.orderStatus = { $ne: OrderStatus.PAUSE };
+		}
 
-		return await this.aggregateOrders(match, sort, input.page, input.limit);
+		return await this.aggregateOrders(match, sort, input.page, input.limit, true);
+	}
+
+	/** who bought from this store, and how much — ranked by spend */
+	public async getStoreCustomersByAdmin(input: StoreCustomersInquiry): Promise<StoreCustomers> {
+		const { page, limit } = input;
+		const sellerId = shapeIntoMongoObjectId(input.search.sellerId);
+
+		const result = await this.orderItemModel
+			.aggregate([
+				...this.paidStoreLines(sellerId),
+				{
+					$group: {
+						_id: '$order.memberId',
+						orders: { $addToSet: '$orderId' },
+						unitsBought: { $sum: '$itemQuantity' },
+						totalSpent: { $sum: '$lineTotal' },
+						lastOrderAt: { $max: '$order.purchasedAt' },
+					},
+				},
+				{
+					$project: {
+						orderCount: { $size: '$orders' },
+						unitsBought: 1,
+						totalSpent: { $round: ['$totalSpent', 0] },
+						lastOrderAt: 1,
+					},
+				},
+				{ $sort: { totalSpent: Direction.DESC, _id: Direction.ASC } },
+				{
+					$facet: {
+						list: [
+							{ $skip: (page - 1) * limit },
+							{ $limit: limit },
+							{ $lookup: { from: 'members', localField: '_id', foreignField: '_id', as: 'memberData' } },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+
+		return result[0] ?? { list: [], metaCounter: [] };
+	}
+
+	public async getStoreSummaryByAdmin(input: ObjectId): Promise<StoreSummary> {
+		const sellerId = shapeIntoMongoObjectId(input);
+		const result = await this.orderItemModel
+			.aggregate([
+				...this.paidStoreLines(sellerId),
+				{
+					$group: {
+						_id: null,
+						orders: { $addToSet: '$orderId' },
+						customers: { $addToSet: '$order.memberId' },
+						unitsSold: { $sum: '$itemQuantity' },
+						grossSales: { $sum: '$lineTotal' },
+					},
+				},
+				{
+					$project: {
+						_id: 0,
+						orderCount: { $size: '$orders' },
+						customerCount: { $size: '$customers' },
+						unitsSold: 1,
+						grossSales: { $round: ['$grossSales', 0] },
+					},
+				},
+			])
+			.exec();
+
+		return result[0] ?? { orderCount: 0, unitsSold: 0, grossSales: 0, customerCount: 0 };
 	}
 
 	public async updateOrderByAdmin(input: OrderUpdate): Promise<Order> {
@@ -234,6 +367,52 @@ export class OrderService {
 		const cart = await this.orderModel.findOne({ memberId, orderStatus: OrderStatus.PAUSE }).exec();
 		if (cart) return cart;
 		return await this.orderModel.create({ memberId, orderStatus: OrderStatus.PAUSE });
+	}
+
+	/**
+	 * A size / color must be one the product offers. A product with a single option
+	 * gets it filled in; one with several makes the buyer choose.
+	 */
+	private resolveVariant(
+		product: Product,
+		size?: ProductSize,
+		color?: ProductColor,
+	): { itemSize?: ProductSize; itemColor?: ProductColor } {
+		const sizes = product.productSizes ?? [];
+		const colors = product.productColors ?? [];
+
+		const itemSize = size ?? (sizes.length === 1 ? sizes[0] : undefined);
+		const itemColor = color ?? (colors.length === 1 ? colors[0] : undefined);
+
+		if (sizes.length && !itemSize) throw new BadRequestException(Message.SIZE_REQUIRED);
+		if (colors.length && !itemColor) throw new BadRequestException(Message.COLOR_REQUIRED);
+		if (itemSize && !sizes.includes(itemSize)) throw new BadRequestException(Message.OPTION_NOT_AVAILABLE);
+		if (itemColor && !colors.includes(itemColor)) throw new BadRequestException(Message.OPTION_NOT_AVAILABLE);
+
+		return { itemSize, itemColor };
+	}
+
+	private async cartQuantityOf(orderId: ObjectId, productId: ObjectId): Promise<number> {
+		const lines = await this.orderItemModel.find({ orderId, productId }).select('itemQuantity').lean().exec();
+		return lines.reduce((sum, ele) => sum + ele.itemQuantity, 0);
+	}
+
+	private async resolveShipping(memberId: ObjectId, input: OrderInput): Promise<OrderShipping> {
+		const source = input.addressId
+			? await this.addressService.readOwned(memberId, shapeIntoMongoObjectId(input.addressId))
+			: input.shipping;
+		if (!source) throw new BadRequestException(Message.ADDRESS_REQUIRED);
+
+		const { recipientName, recipientPhone, addressLine1, addressLine2, city, postalCode } = source;
+		return { recipientName, recipientPhone, addressLine1, addressLine2, city, postalCode };
+	}
+
+	private async resolvePayment(memberId: ObjectId, input: OrderInput): Promise<PaymentSnapshot> {
+		if (input.paymentMethodId) {
+			return await this.paymentService.readOwned(memberId, shapeIntoMongoObjectId(input.paymentMethodId));
+		}
+		if (!input.payment) throw new BadRequestException(Message.PAYMENT_REQUIRED);
+		return this.paymentService.toSnapshot(input.payment);
 	}
 
 	private async readSellableProduct(productId: ObjectId): Promise<Product> {
@@ -284,7 +463,42 @@ export class OrderService {
 		return result[0];
 	}
 
-	private async aggregateOrders(match: T, sort: T, page: number, limit: number): Promise<Orders> {
+	/**
+	 * A store's lines in orders that were actually paid (PROCESS or FINISH), each with its
+	 * discounted line total — the same unit-price rule recalculateTotals uses.
+	 */
+	private paidStoreLines(sellerId: ObjectId): PipelineStage[] {
+		return [
+			{ $match: { sellerId } },
+			{ $lookup: { from: 'orders', localField: 'orderId', foreignField: '_id', as: 'order' } },
+			{ $unwind: '$order' },
+			{ $match: { 'order.orderStatus': { $in: [OrderStatus.PROCESS, OrderStatus.FINISH] } } },
+			{
+				$addFields: {
+					lineTotal: {
+						$multiply: [
+							'$itemQuantity',
+							'$itemPrice',
+							{ $subtract: [1, { $divide: [{ $ifNull: ['$itemDiscount', 0] }, 100] }] },
+						],
+					},
+				},
+			},
+		];
+	}
+
+	/** withBuyer joins the buyer's member document — admin lists only, never the seller's view */
+	private async aggregateOrders(
+		match: T,
+		sort: T,
+		page: number,
+		limit: number,
+		withBuyer: boolean = false,
+	): Promise<Orders> {
+		const buyerLookup = withBuyer
+			? [lookupMember, { $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } }]
+			: [];
+
 		const result = await this.orderModel
 			.aggregate([
 				{ $match: match },
@@ -296,6 +510,7 @@ export class OrderService {
 							{ $limit: limit },
 							lookupOrderItems,
 							lookupOrderProducts,
+							...buyerLookup,
 						],
 						metaCounter: [{ $count: 'total' }],
 					},

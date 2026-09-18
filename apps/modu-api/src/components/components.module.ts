@@ -10,6 +10,8 @@ import { FollowModule } from './follow/follow.module';
 import { OrderModule } from './order/order.module';
 import { ReturnModule } from './return/return.module';
 import { NoticeModule } from './notice/notice.module';
+import { AddressModule } from './address/address.module';
+import { PaymentModule } from './payment/payment.module';
 
 /** Pure aggregator — AppModule imports this, never an individual feature. */
 @Module({
@@ -25,6 +27,8 @@ import { NoticeModule } from './notice/notice.module';
 		OrderModule,
 		ReturnModule,
 		NoticeModule,
+		AddressModule,
+		PaymentModule,
 	],
 })
 export class ComponentsModule {}

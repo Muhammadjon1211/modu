@@ -2,8 +2,15 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 import { OrderService } from './order.service';
-import { Order, Orders } from '../../libs/dto/order/order';
-import { AllOrdersInquiry, OrderItemInput, OrdersInquiry } from '../../libs/dto/order/order.input';
+import { Order, Orders, StoreCustomers, StoreSummary } from '../../libs/dto/order/order';
+import {
+	AllOrdersInquiry,
+	CartItemUpdate,
+	OrderInput,
+	OrderItemInput,
+	OrdersInquiry,
+	StoreCustomersInquiry,
+} from '../../libs/dto/order/order.input';
 import { OrderUpdate } from '../../libs/dto/order/order.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -37,18 +44,28 @@ export class OrderResolver {
 	@UseGuards(AuthGuard)
 	@Mutation(() => Order)
 	public async removeFromCart(
-		@Args('productId') input: string,
+		@Args('orderItemId') input: string,
 		@AuthMember('_id') memberId: ObjectId,
 	): Promise<Order> {
 		console.log('Mutation: removeFromCart');
-		const productId = shapeIntoMongoObjectId(input);
-		return await this.orderService.removeFromCart(memberId, productId);
+		return await this.orderService.removeFromCart(memberId, shapeIntoMongoObjectId(input));
+	}
+
+	@UseGuards(AuthGuard)
+	@Mutation(() => Order)
+	public async updateCartItem(
+		@Args('input') input: CartItemUpdate,
+		@AuthMember('_id') memberId: ObjectId,
+	): Promise<Order> {
+		console.log('Mutation: updateCartItem');
+		input.orderItemId = shapeIntoMongoObjectId(input.orderItemId);
+		return await this.orderService.updateCartItem(memberId, input);
 	}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Order)
 	public async createOrder(
-		@Args('input', { type: () => [OrderItemInput] }) input: OrderItemInput[],
+		@Args('input') input: OrderInput,
 		@AuthMember('_id') memberId: ObjectId,
 	): Promise<Order> {
 		console.log('Mutation: createOrder');
@@ -95,6 +112,23 @@ export class OrderResolver {
 	public async getAllOrdersByAdmin(@Args('input') input: AllOrdersInquiry): Promise<Orders> {
 		console.log('Query: getAllOrdersByAdmin');
 		return await this.orderService.getAllOrdersByAdmin(input);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => StoreCustomers)
+	public async getStoreCustomersByAdmin(@Args('input') input: StoreCustomersInquiry): Promise<StoreCustomers> {
+		console.log('Query: getStoreCustomersByAdmin');
+		return await this.orderService.getStoreCustomersByAdmin(input);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => StoreSummary)
+	public async getStoreSummaryByAdmin(@Args('sellerId') input: string): Promise<StoreSummary> {
+		console.log('Query: getStoreSummaryByAdmin');
+		const sellerId = shapeIntoMongoObjectId(input);
+		return await this.orderService.getStoreSummaryByAdmin(sellerId);
 	}
 
 	@Roles(MemberType.ADMIN)

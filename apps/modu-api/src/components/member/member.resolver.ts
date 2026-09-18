@@ -168,6 +168,15 @@ export class MemberResolver {
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
+	@Query(() => Member)
+	public async getMemberByAdmin(@Args('memberId') input: string): Promise<Member> {
+		console.log('Query: getMemberByAdmin');
+		const targetId = shapeIntoMongoObjectId(input);
+		return await this.memberService.getMemberByAdmin(targetId);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
 	@Mutation(() => Member)
 	public async updateMemberByAdmin(@Args('input') input: MemberUpdate): Promise<Member> {
 		console.log('Mutation: updateMemberByAdmin');

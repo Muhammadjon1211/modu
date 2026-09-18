@@ -171,6 +171,13 @@ export class MemberService {
 		return result[0] ?? { list: [], metaCounter: [] };
 	}
 
+	/** any status, and no view recorded — an admin looking is not a visitor */
+	public async getMemberByAdmin(targetId: ObjectId): Promise<Member> {
+		const result = await this.memberModel.findById(targetId).lean<Member>().exec();
+		if (!result) throw new NotFoundException(Message.NO_DATA_FOUND);
+		return result;
+	}
+
 	public async updateMemberByAdmin(input: MemberUpdate): Promise<Member> {
 		if (input.memberPassword) input.memberPassword = await this.authService.hashPassword(input.memberPassword);
 		if (input.memberStatus === MemberStatus.DELETE) input.deletedAt = moment().toDate();

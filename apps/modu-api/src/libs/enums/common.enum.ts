@@ -30,6 +30,16 @@ export enum Message {
 	EMPTY_CART = 'Your cart is empty!',
 	ORDER_NOT_CANCELLABLE = 'This order can no longer be cancelled!',
 	ORDER_NOT_UPDATABLE = 'This order can no longer move to that status!',
+	SIZE_REQUIRED = 'Please choose a size!',
+	COLOR_REQUIRED = 'Please choose a color!',
+	OPTION_NOT_AVAILABLE = 'That size or color is not available!',
+
+	/** checkout */
+	ADDRESS_REQUIRED = 'Please add a shipping address!',
+	PAYMENT_REQUIRED = 'Please add a payment method!',
+	INVALID_CARD = 'Card number is not valid!',
+	CARD_EXPIRED = 'This card has expired!',
+	INVALID_ACCOUNT = 'Account number is not valid!',
 	NOT_PURCHASED_PRODUCT = 'Only buyers of this product may review it!',
 	ALREADY_REVIEWED = 'You have already reviewed this product!',
 	INVALID_DISCOUNT = 'Discount must be between 0 and 99 percent!',

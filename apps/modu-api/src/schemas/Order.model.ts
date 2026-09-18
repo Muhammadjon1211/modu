@@ -1,5 +1,6 @@
 import { Schema } from 'mongoose';
 import { OrderStatus } from '../libs/enums/order.enum';
+import { PaymentType } from '../libs/enums/payment.enum';
 
 /**
  * The cart is an Order in PAUSE state — there is no separate cart collection,
@@ -20,6 +21,22 @@ const OrderSchema = new Schema(
 		 * can sit untouched for weeks before checkout.
 		 */
 		purchasedAt: { type: Date },
+
+		/** copies taken at checkout, so editing or deleting a saved address / card never rewrites an order */
+		orderShipping: {
+			recipientName: String,
+			recipientPhone: String,
+			addressLine1: String,
+			addressLine2: String,
+			city: String,
+			postalCode: String,
+		},
+		orderPayment: {
+			paymentType: { type: String, enum: PaymentType },
+			holderName: String,
+			provider: String,
+			last4: String,
+		},
 		deletedAt: { type: Date },
 	},
 	{ timestamps: true, collection: 'orders' },

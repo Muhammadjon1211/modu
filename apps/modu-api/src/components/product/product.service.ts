@@ -328,10 +328,11 @@ export class ProductService {
 	/** ADMIN **/
 
 	public async getAllProductsByAdmin(input: AllProductsInquiry): Promise<Products> {
-		const { productStatus, categoryList, text } = input.search;
+		const { memberId, productStatus, categoryList, text } = input.search;
 		const match: T = {};
 		const sort: T = { [input?.sort ?? 'createdAt']: input?.direction ?? Direction.DESC };
 
+		if (memberId) match.memberId = shapeIntoMongoObjectId(memberId);
 		if (productStatus) match.productStatus = productStatus;
 		if (categoryList) match.productCategory = { $in: categoryList };
 		if (text) match.productTitle = { $regex: new RegExp(text, 'i') };
