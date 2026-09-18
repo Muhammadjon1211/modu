@@ -61,3 +61,22 @@ export class MemberUpdate {
 
 	deletedAt?: Date; // server-set only
 }
+
+/** a member changing their own sign-in — the current password proves it is really them */
+@InputType()
+export class CredentialsUpdate {
+	@IsNotEmpty()
+	@Length(5, 12)
+	@Field(() => String)
+	currentPassword: string;
+
+	@IsOptional()
+	@Length(3, 12)
+	@Field(() => String, { nullable: true })
+	memberNick?: string;
+
+	@IsOptional()
+	@Length(5, 12)
+	@Field(() => String, { nullable: true })
+	newPassword?: string;
+}

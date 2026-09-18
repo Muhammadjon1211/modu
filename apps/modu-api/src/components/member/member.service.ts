@@ -4,7 +4,7 @@ import { Model, ObjectId } from 'mongoose';
 import moment from 'moment';
 import { Member, Members } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput, MembersInquiry, SellersInquiry } from '../../libs/dto/member/member.input';
-import { MemberUpdate } from '../../libs/dto/member/member.update';
+import { CredentialsUpdate, MemberUpdate } from '../../libs/dto/member/member.update';
 import { Follower } from '../../libs/dto/follow/follow';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
@@ -72,6 +72,35 @@ export class MemberService {
 		// the token carries memberNick / memberType / memberImage, so re-issue it after a change
 		result.accessToken = await this.authService.createToken(result);
 		return result;
+	}
+
+	/** nick and/or password, only after the current password checks out */
+	public async updateMyCredentials(memberId: ObjectId, input: CredentialsUpdate): Promise<Member> {
+		const { currentPassword, memberNick, newPassword } = input;
+		const member = await this.memberModel
+			.findOne({ _id: memberId, memberStatus: MemberStatus.ACTIVE })
+			.select('+memberPassword')
+			.exec();
+		if (!member) throw new NotFoundException(Message.NO_DATA_FOUND);
+
+		const isMatch = await this.authService.comparePasswords(currentPassword, member.memberPassword ?? '');
+		if (!isMatch) throw new UnauthorizedException(Message.WRONG_PASSWORD);
+
+		const update: T = {};
+		if (memberNick && memberNick !== member.memberNick) update.memberNick = memberNick;
+		if (newPassword) update.memberPassword = await this.authService.hashPassword(newPassword);
+		if (!Object.keys(update).length) throw new BadRequestException(Message.NOTHING_TO_UPDATE);
+
+		try {
+			const result = await this.memberModel.findByIdAndUpdate(memberId, update, { new: true }).exec();
+			if (!result) throw new NotFoundException(Message.UPDATE_FAILED);
+			// the token carries memberNick, so a renamed member needs a fresh one
+			result.accessToken = await this.authService.createToken(result);
+			return result;
+		} catch (err) {
+			if (err?.code === 11000) throw new BadRequestException(Message.USED_MEMBER_NICK_OR_PHONE);
+			throw err;
+		}
 	}
 
 	public async getMember(memberId: ObjectId | null, targetId: ObjectId): Promise<Member> {
@@ -176,6 +205,18 @@ export class MemberService {
 		const result = await this.memberModel.findById(targetId).lean<Member>().exec();
 		if (!result) throw new NotFoundException(Message.NO_DATA_FOUND);
 		return result;
+	}
+
+	/** the only way an admin account comes to exist — signup refuses ADMIN */
+	public async createAdminByAdmin(input: MemberInput): Promise<Member> {
+		input.memberType = MemberType.ADMIN;
+		input.memberPassword = await this.authService.hashPassword(input.memberPassword);
+		try {
+			return await this.memberModel.create(input);
+		} catch (err) {
+			console.log('Error, Service.model:', err.message);
+			throw new BadRequestException(Message.USED_MEMBER_NICK_OR_PHONE);
+		}
 	}
 
 	public async updateMemberByAdmin(input: MemberUpdate): Promise<Member> {

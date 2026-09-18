@@ -23,6 +23,7 @@ export enum Message {
 	NOT_ALLOWED_REQUEST = 'Not Allowed Request!',
 	PROVIDE_ALLOWED_FORMAT = 'Please provide jpg, png, or jpeg images!',
 	SELF_SUBSCRIPTION_DENIED = 'Self subscription is denied!',
+	NOTHING_TO_UPDATE = 'Nothing to change!',
 
 	/** commerce */
 	OUT_OF_STOCK = 'Product is out of stock!',

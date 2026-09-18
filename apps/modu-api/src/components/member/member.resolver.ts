@@ -6,7 +6,7 @@ import { FileUpload, GraphQLUpload } from 'graphql-upload';
 import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput, MembersInquiry, SellersInquiry } from '../../libs/dto/member/member.input';
-import { MemberUpdate } from '../../libs/dto/member/member.update';
+import { CredentialsUpdate, MemberUpdate } from '../../libs/dto/member/member.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { Message } from '../../libs/enums/common.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -57,6 +57,16 @@ export class MemberResolver {
 		// a caller must never be able to update another document
 		delete (input as Partial<MemberUpdate>)._id;
 		return await this.memberService.updateMember(memberId, input);
+	}
+
+	@UseGuards(AuthGuard)
+	@Mutation(() => Member)
+	public async updateMyCredentials(
+		@Args('input') input: CredentialsUpdate,
+		@AuthMember('_id') memberId: ObjectId,
+	): Promise<Member> {
+		console.log('Mutation: updateMyCredentials');
+		return await this.memberService.updateMyCredentials(memberId, input);
 	}
 
 	@UseGuards(WithoutGuard)
@@ -173,6 +183,14 @@ export class MemberResolver {
 		console.log('Query: getMemberByAdmin');
 		const targetId = shapeIntoMongoObjectId(input);
 		return await this.memberService.getMemberByAdmin(targetId);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Mutation(() => Member)
+	public async createAdminByAdmin(@Args('input') input: MemberInput): Promise<Member> {
+		console.log('Mutation: createAdminByAdmin');
+		return await this.memberService.createAdminByAdmin(input);
 	}
 
 	@Roles(MemberType.ADMIN)
