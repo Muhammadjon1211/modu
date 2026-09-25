@@ -1,0 +1,33 @@
+# Modu on the VPS: nginx on :8090 in front of the Next.js site and the NestJS API.
+name: modu
+services:
+  api:
+    build: { context: .., dockerfile: deploy/api.Dockerfile }
+    image: modu-api
+    env_file: api.env
+    environment: { PORT_API: "3011", TZ: Asia/Seoul }
+    volumes: [ "../uploads:/app/uploads" ]
+    restart: unless-stopped
+
+  batch:
+    image: modu-api
+    command: ["node", "dist/apps/modu-batch/main"]
+    env_file: api.env
+    environment: { PORT_BATCH: "3012", TZ: Asia/Seoul }
+    depends_on: [ api ]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args: { PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://187.53.134.187:8090}" }
+    image: modu-web
+    restart: unless-stopped
+
+  proxy:
+    image: nginx:alpine
+    ports: [ "8090:80" ]
+    volumes: [ "./nginx.conf:/etc/nginx/conf.d/default.conf:ro" ]
+    depends_on: [ api, web ]
+    restart: unless-stopped
