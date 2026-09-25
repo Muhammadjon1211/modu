@@ -13,9 +13,8 @@ TAR=/tmp/modu-src.tgz
 echo "== packing source"
 tar --exclude=node_modules --exclude=.next --exclude=dist --exclude=.git --exclude='*.tsbuildinfo' \
     --exclude='modu-nest/uploads' --exclude='modu-nest/.env' --exclude='modu-next/.env*' \
-    -czf "$TAR" modu-nest modu-next deploy/api.Dockerfile deploy/web.Dockerfile \
-    deploy/docker-compose.yml deploy/nginx.conf deploy/.env \
-    deploy/api.Dockerfile.dockerignore deploy/web.Dockerfile.dockerignore
+    --exclude='modu-nest/deploy/redeploy.sh' --transform 's#^modu-nest/deploy#deploy#' \
+    -czf "$TAR" modu-nest modu-next
 scp -q "$TAR" "$HOST:/tmp/modu-src.tgz"
 
 if [[ "${1:-}" == "--with-uploads" ]]; then
@@ -35,11 +34,15 @@ ssh "$HOST" "echo $SUDO_PW | sudo -S -p '' -u muhammad -H bash -c '
 '; echo $SUDO_PW | sudo -S -p '' rm -f /tmp/modu-src.tgz /tmp/modu-uploads.tgz"
 
 echo "== smoke test"
+set +e # report every check instead of stopping at the first one still warming up
+SITE=http://187.53.134.187:8090
+PRODUCTS_QUERY='{"query":"{getProducts(input:{page:1,limit:1,search:{}}){list{productImages}}}"}'
+# the web and api containers restart independently — wait until both answer
 for i in $(seq 1 40); do
-    [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://187.53.134.187:8090/)" = "200" ] && break
+    IMG=$(curl -s -m 5 -X POST -H 'content-type: application/json' --data "$PRODUCTS_QUERY" "$SITE/graphql" | grep -o 'uploads/[^"]*' | head -1)
+    [ -n "$IMG" ] && [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$SITE/")" = "200" ] && break
     sleep 3
 done
-IMG=$(curl -s -X POST -H 'content-type: application/json' --data '{"query":"{getProducts(input:{page:1,limit:1,search:{}}){list{productImages}}}"}' http://187.53.134.187:8090/graphql | grep -o 'uploads/[^"]*' | head -1)
 for path in / /product "/$IMG"; do
     printf '%-28s ' "$path"; curl -s -o /dev/null -w '%{http_code}\n' "http://187.53.134.187:8090$path"
 done
