@@ -18,9 +18,14 @@ export class WithoutGuard implements CanActivate {
 
 		if (bearerToken) {
 			const token = bearerToken.split(' ')[1];
-			const authMember = await this.authService.verifyToken(token);
-			console.log('memberNick[without] =>', authMember?.memberNick);
-			request.body.authMember = authMember;
+			try {
+				const authMember = await this.authService.verifyToken(token);
+				console.log('memberNick[without] =>', authMember?.memberNick);
+				request.body.authMember = authMember;
+			} catch {
+				// stale / malformed token: serve the request as a guest instead of failing it
+				request.body.authMember = null;
+			}
 		} else {
 			request.body.authMember = null;
 		}
