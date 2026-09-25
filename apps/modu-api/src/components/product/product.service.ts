@@ -19,6 +19,7 @@ import { StatisticModifier, T } from '../../libs/types/common';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { LikeService } from '../like/like.service';
+import { RecommendationService } from '../recommendation/recommendation.service';
 import { groupOfCategory, lookupAuthMemberLiked, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class ProductService {
 		private readonly memberService: MemberService,
 		private readonly viewService: ViewService,
 		private readonly likeService: LikeService,
+		private readonly recommendationService: RecommendationService,
 	) {}
 
 	public async createProduct(input: ProductInput): Promise<Product> {
@@ -129,7 +131,9 @@ export class ProductService {
 			.exec();
 
 		// an empty browse page is not an error
-		return result[0] ?? { list: [], metaCounter: [] };
+		const page: Products = result[0] ?? { list: [], metaCounter: [] };
+		await this.recommendationService.markRecommended(memberId, page.list);
+		return page;
 	}
 
 	private shapeMatchQuery(match: T, input: ProductsInquiry): void {
@@ -224,11 +228,12 @@ export class ProductService {
 		});
 		const result = await this.productStatsEditor({ _id: likeRefId, targetKey: 'productLikes', modifier });
 		if (!result) throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		this.recommendationService.invalidate(memberId); // a like is a strong taste signal — re-rank now
 		return result;
 	}
 
 	/** same category as the current product, itself excluded */
-	public async getRelatedProducts(productId: ObjectId, limit: number): Promise<Products> {
+	public async getRelatedProducts(memberId: ObjectId | null, productId: ObjectId, limit: number): Promise<Products> {
 		const target = await this.productModel.findById(productId).lean<Product>().exec();
 		if (!target) throw new NotFoundException(Message.NO_DATA_FOUND);
 
@@ -248,6 +253,7 @@ export class ProductService {
 			])
 			.exec();
 
+		await this.recommendationService.markRecommended(memberId, list);
 		return { list, metaCounter: [{ total: list.length }] };
 	}
 

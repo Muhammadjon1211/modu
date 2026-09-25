@@ -37,6 +37,22 @@ export const availableReturnSorts = ['createdAt', 'updatedAt', 'returnAmount'];
  */
 export const RETURN_WINDOW_DAYS = 3;
 
+/**
+ * Recommendation tuning — every knob the recommender reads lives here.
+ * Signal weights rank how much each action says about taste: a purchase beats
+ * a cart line beats a like beats a view.
+ */
+export const RECOMMEND_SIGNAL_WEIGHTS = { VIEW: 1, LIKE: 3, CART: 4, PURCHASE: 5 };
+/** a signal loses ~63% of its weight after this many days */
+export const RECOMMEND_DECAY_DAYS = 45;
+/** how far back "trending" looks for guests and new members */
+export const RECOMMEND_TRENDING_DAYS = 14;
+/** per-member ranking is cached this long; a like drops the cache early */
+export const RECOMMEND_CACHE_TTL_MS = 10 * 60 * 1000;
+/** badge at most this many cards, and never more than this share of the catalog */
+export const RECOMMEND_BADGE_MAX = 8;
+export const RECOMMEND_BADGE_SHARE = 0.25;
+
 /** Boolean facets — the "options" checkbox group. */
 export const availableOptions = ['productOnSale', 'productFreeShipping', 'productNew'];
 

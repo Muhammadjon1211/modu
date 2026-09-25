@@ -103,11 +103,12 @@ export class ProductResolver {
 	@Query(() => Products)
 	public async getRelatedProducts(
 		@Args('productId') input: string,
+		@AuthMember('_id') memberId: ObjectId,
 		@Args('limit', { type: () => Int, nullable: true }) limit?: number,
 	): Promise<Products> {
 		console.log('Query: getRelatedProducts');
 		const productId = shapeIntoMongoObjectId(input);
-		return await this.productService.getRelatedProducts(productId, limit ?? 8);
+		return await this.productService.getRelatedProducts(memberId, productId, limit ?? 8);
 	}
 
 	@UseGuards(AuthGuard)

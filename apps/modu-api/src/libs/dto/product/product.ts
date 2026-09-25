@@ -83,6 +83,9 @@ export class Product {
 	@Field(() => Member, { nullable: true }) memberData?: Member;
 
 	@Field(() => [MeLiked], { nullable: true }) meLiked?: MeLiked[];
+
+	/** set per viewer — true when this product is one of their top personal picks */
+	@Field(() => Boolean, { nullable: true }) meRecommended?: boolean;
 }
 
 @ObjectType()

@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ViewModule } from '../view/view.module';
 import { MemberModule } from '../member/member.module';
 import { LikeModule } from '../like/like.module';
+import { RecommendationModule } from '../recommendation/recommendation.module';
 
 @Module({
 	imports: [
@@ -15,6 +16,7 @@ import { LikeModule } from '../like/like.module';
 		ViewModule, // the service records views
 		MemberModule, // the service bumps member counters
 		LikeModule, // the service toggles likes
+		RecommendationModule, // the service flags the viewer's personal picks
 	],
 	providers: [ProductResolver, ProductService],
 	exports: [ProductService],
