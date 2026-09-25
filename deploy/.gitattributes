@@ -1,0 +1,2 @@
+# shell scripts, Dockerfiles and nginx config run on Linux — keep LF even on a Windows checkout
+* text eol=lf
