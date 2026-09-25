@@ -4,6 +4,7 @@ WORKDIR /app
 ARG PUBLIC_ORIGIN
 ENV REACT_APP_API_URL=${PUBLIC_ORIGIN} \
     REACT_APP_API_GRAPHQL_URL=${PUBLIC_ORIGIN}/graphql \
+    REACT_APP_SITE_URL=${PUBLIC_ORIGIN} \
     NEXT_TELEMETRY_DISABLED=1
 RUN command -v yarn || npm i -g yarn@1
 COPY modu-next/package.json modu-next/yarn.lock ./

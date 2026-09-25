@@ -101,9 +101,14 @@ export class RecommendationService {
 		list.forEach((product) => (product.meRecommended = badged.has(String(product._id))));
 	}
 
-	/** called when the member does something that should change their picks right away */
+	/**
+	 * Called when the member does something that should change their picks right away.
+	 * The new ranking starts computing now, in the background, so the next page they open
+	 * reads it from the cache instead of waiting for it.
+	 */
 	public invalidate(memberId: ObjectId): void {
 		this.cache.delete(String(memberId));
+		this.getRanking(memberId).catch((err) => console.log('Error, recommendation prewarm:', err.message));
 	}
 
 	/** concurrent callers (every home page section) share one in-flight computation */

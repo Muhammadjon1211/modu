@@ -23,6 +23,8 @@ services:
       dockerfile: deploy/web.Dockerfile
       args: { PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://187.53.134.187:8090}" }
     image: modu-web
+    # server-side link previews fetch the product over the internal network
+    environment: { INTERNAL_API_GRAPHQL_URL: "http://api:3011/graphql" }
     restart: unless-stopped
 
   proxy:
