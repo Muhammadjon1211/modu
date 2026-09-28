@@ -18,5 +18,10 @@ export enum MemberAuthType {
 	PHONE = 'PHONE',
 	EMAIL = 'EMAIL',
 	TELEGRAM = 'TELEGRAM',
+	GOOGLE = 'GOOGLE',
+	KAKAO = 'KAKAO',
 }
 registerEnumType(MemberAuthType, { name: 'MemberAuthType' });
+
+/** the auth types that sign in through an outside provider instead of a password */
+export const socialAuthTypes = [MemberAuthType.GOOGLE, MemberAuthType.KAKAO, MemberAuthType.TELEGRAM];

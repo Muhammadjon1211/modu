@@ -1,14 +1,21 @@
 import { Schema } from 'mongoose';
-import { MemberAuthType, MemberStatus, MemberType } from '../libs/enums/member.enum';
+import { MemberAuthType, MemberStatus, MemberType, socialAuthTypes } from '../libs/enums/member.enum';
+
+function isPasswordAccount(this: { memberAuthType?: MemberAuthType }): boolean {
+	return !socialAuthTypes.includes(this.memberAuthType as MemberAuthType);
+}
 
 const MemberSchema = new Schema(
 	{
 		memberType: { type: String, enum: MemberType, default: MemberType.USER },
 		memberStatus: { type: String, enum: MemberStatus, default: MemberStatus.ACTIVE },
 		memberAuthType: { type: String, enum: MemberAuthType, default: MemberAuthType.PHONE },
-		memberPhone: { type: String, index: { unique: true, sparse: true }, required: true },
+		// a social account arrives with neither — it may add both later in My Profile
+		memberPhone: { type: String, index: { unique: true, sparse: true }, required: isPasswordAccount },
 		memberNick: { type: String, index: { unique: true, sparse: true }, required: true },
-		memberPassword: { type: String, select: false, required: true },
+		memberPassword: { type: String, select: false, required: isPasswordAccount },
+		/** the provider's own user id — Google `sub`, Kakao id, Telegram id */
+		memberSocialId: { type: String, select: false },
 		memberFullName: { type: String },
 		memberImage: { type: String, default: '' },
 		memberAddress: { type: String },
@@ -37,6 +44,12 @@ const MemberSchema = new Schema(
 		deletedAt: { type: Date },
 	},
 	{ timestamps: true, collection: 'members' },
+);
+
+// one Modu account per provider identity
+MemberSchema.index(
+	{ memberAuthType: 1, memberSocialId: 1 },
+	{ unique: true, partialFilterExpression: { memberSocialId: { $type: 'string' } } },
 );
 
 export default MemberSchema;

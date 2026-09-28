@@ -1,6 +1,6 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsIn, IsNotEmpty, IsOptional, Length, Min } from 'class-validator';
-import { MemberAuthType, MemberStatus, MemberType } from '../../enums/member.enum';
+import { IsIn, IsNotEmpty, IsOptional, Length, MaxLength, Min } from 'class-validator';
+import { MemberAuthType, MemberStatus, MemberType, socialAuthTypes } from '../../enums/member.enum';
 import { Direction } from '../../enums/common.enum';
 import { availableMemberSorts, availableSellerSorts } from '../../config';
 
@@ -40,6 +40,33 @@ export class LoginInput {
 	@Length(5, 12)
 	@Field(() => String)
 	memberPassword: string;
+}
+
+/**
+ * One mutation for every provider. `credential` is what the provider hands the browser:
+ * Google's ID token, Kakao's authorization code, or the Telegram widget's user object as JSON.
+ */
+@InputType()
+export class SocialLoginInput {
+	@IsNotEmpty()
+	@IsIn(socialAuthTypes)
+	@Field(() => MemberAuthType)
+	provider: MemberAuthType;
+
+	@IsNotEmpty()
+	@MaxLength(4096)
+	@Field(() => String)
+	credential: string;
+
+	/** Kakao only — must equal the redirect_uri the authorization code was issued for */
+	@IsOptional()
+	@Field(() => String, { nullable: true })
+	redirectUri?: string;
+
+	/** applies only when this login creates the account */
+	@IsOptional()
+	@Field(() => MemberType, { nullable: true })
+	memberType?: MemberType;
 }
 
 @InputType()

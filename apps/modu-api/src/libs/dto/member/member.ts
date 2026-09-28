@@ -14,11 +14,13 @@ export class Member {
 
 	@Field(() => MemberAuthType) memberAuthType: MemberAuthType;
 
-	@Field(() => String) memberPhone: string;
+	@Field(() => String, { nullable: true }) memberPhone?: string; // social accounts have none
 
 	@Field(() => String) memberNick: string;
 
 	memberPassword?: string; // no @Field — never exposed
+
+	memberSocialId?: string; // no @Field — the provider's id stays server-side
 
 	@Field(() => String, { nullable: true }) memberFullName?: string;
 

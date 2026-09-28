@@ -24,6 +24,8 @@ export enum Message {
 	PROVIDE_ALLOWED_FORMAT = 'Please provide jpg, png, or jpeg images!',
 	SELF_SUBSCRIPTION_DENIED = 'Self subscription is denied!',
 	NOTHING_TO_UPDATE = 'Nothing to change!',
+	SOCIAL_LOGIN_FAILED = 'Could not sign you in with that account, please try again!',
+	SOCIAL_PROVIDER_DISABLED = 'This sign-in option is not available!',
 
 	/** commerce */
 	OUT_OF_STOCK = 'Product is out of stock!',

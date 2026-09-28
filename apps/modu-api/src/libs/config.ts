@@ -67,6 +67,13 @@ export const TRYON_DENOISE_STEPS = 30;
 /** per member, per rolling hour — the Space's free GPU quota is shared by everyone */
 export const TRYON_HOURLY_LIMIT = 10;
 
+/** Social login — outside calls give up after this long */
+export const SOCIAL_TIMEOUT_MS = 10 * 1000;
+/** a Telegram login payload older than this is refused */
+export const SOCIAL_TELEGRAM_MAX_AGE_SEC = 24 * 60 * 60;
+/** generated nicknames keep this much of the provider's name, leaving room for a numeric suffix */
+export const SOCIAL_NICK_BASE_LENGTH = 7;
+
 /** Boolean facets — the "options" checkbox group. */
 export const availableOptions = ['productOnSale', 'productFreeShipping', 'productNew'];
 

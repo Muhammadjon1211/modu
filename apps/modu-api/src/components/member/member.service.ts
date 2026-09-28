@@ -3,18 +3,20 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import moment from 'moment';
 import { Member, Members } from '../../libs/dto/member/member';
-import { LoginInput, MemberInput, MembersInquiry, SellersInquiry } from '../../libs/dto/member/member.input';
+import { LoginInput, MemberInput, MembersInquiry, SellersInquiry, SocialLoginInput } from '../../libs/dto/member/member.input';
 import { CredentialsUpdate, MemberUpdate } from '../../libs/dto/member/member.update';
 import { Follower } from '../../libs/dto/follow/follow';
-import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
+import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
+import { SocialAuthService } from '../auth/social-auth.service';
+import { SocialIdentity } from '../../libs/dto/auth/social';
 import { ViewService } from '../view/view.service';
 import { LikeService } from '../like/like.service';
-import { lookupAuthMemberLiked } from '../../libs/config';
+import { SOCIAL_NICK_BASE_LENGTH, lookupAuthMemberLiked } from '../../libs/config';
 
 @Injectable()
 export class MemberService {
@@ -22,6 +24,7 @@ export class MemberService {
 		@InjectModel('Member') private readonly memberModel: Model<Member>,
 		@InjectModel('Follow') private readonly followModel: Model<Follower>,
 		private readonly authService: AuthService,
+		private readonly socialAuthService: SocialAuthService,
 		private readonly viewService: ViewService,
 		private readonly likeService: LikeService,
 	) {}
@@ -59,6 +62,53 @@ export class MemberService {
 		response.accessToken = await this.authService.createToken(response);
 		response.memberPassword = undefined;
 		return response;
+	}
+
+	/** log in with a provider account; the first time also creates the Modu account */
+	public async socialLogin(input: SocialLoginInput): Promise<Member> {
+		const { provider, credential, redirectUri, memberType } = input;
+		// same rule as signup: self-registration may pick buyer or seller, never admin
+		if (memberType === MemberType.ADMIN) throw new ForbiddenException(Message.NOT_ALLOWED_REQUEST);
+
+		const identity = await this.socialAuthService.verify(provider, credential, redirectUri);
+		const search = { memberAuthType: provider, memberSocialId: identity.socialId };
+
+		let member: Member | null = await this.memberModel.findOne(search).exec();
+		if (!member) {
+			try {
+				member = await this.memberModel.create({
+					...search,
+					memberType: memberType ?? MemberType.USER,
+					memberNick: await this.generateNick(identity, provider),
+					memberFullName: identity.name,
+					memberImage: identity.image ?? '',
+				});
+			} catch (err) {
+				// two tabs finishing the same first login at once — the other one won, use its account
+				if (err?.code !== 11000) throw err;
+				member = await this.memberModel.findOne(search).exec();
+				if (!member) throw new BadRequestException(Message.SOCIAL_LOGIN_FAILED);
+			}
+		}
+
+		if (member.memberStatus === MemberStatus.DELETE) throw new NotFoundException(Message.NO_DATA_FOUND);
+		if (member.memberStatus === MemberStatus.BLOCK) throw new ForbiddenException(Message.BLOCKED_USER);
+
+		member.accessToken = await this.authService.createToken(member);
+		return member;
+	}
+
+	/** the provider's name trimmed to fit the 3–12 nick rule, with digits added until it is free */
+	private async generateNick(identity: SocialIdentity, provider: MemberAuthType): Promise<string> {
+		const cleaned = (identity.nick || identity.name || '').replace(/[\s@]+/g, '').slice(0, SOCIAL_NICK_BASE_LENGTH);
+		const base = cleaned.length >= 3 ? cleaned : provider.toLowerCase();
+
+		if (!(await this.memberModel.exists({ memberNick: base }))) return base;
+		for (let attempt = 0; attempt < 10; attempt++) {
+			const nick = `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+			if (!(await this.memberModel.exists({ memberNick: nick }))) return nick;
+		}
+		throw new BadRequestException(Message.SOCIAL_LOGIN_FAILED);
 	}
 
 	public async updateMember(memberId: ObjectId, input: MemberUpdate): Promise<Member> {

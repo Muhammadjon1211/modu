@@ -3,6 +3,7 @@ import { HttpModule } from '@nestjs/axios';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
+import { SocialAuthService } from './social-auth.service';
 
 @Module({
 	imports: [
@@ -18,7 +19,7 @@ import { AuthService } from './auth.service';
 			},
 		}),
 	],
-	providers: [AuthService],
-	exports: [AuthService],
+	providers: [AuthService, SocialAuthService],
+	exports: [AuthService, SocialAuthService],
 })
 export class AuthModule {}

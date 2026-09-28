@@ -5,7 +5,9 @@ import { createWriteStream } from 'fs';
 import { FileUpload, GraphQLUpload } from 'graphql-upload';
 import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
-import { LoginInput, MemberInput, MembersInquiry, SellersInquiry } from '../../libs/dto/member/member.input';
+import { LoginInput, MemberInput, MembersInquiry, SellersInquiry, SocialLoginInput } from '../../libs/dto/member/member.input';
+import { AuthProviders } from '../../libs/dto/auth/social';
+import { SocialAuthService } from '../auth/social-auth.service';
 import { CredentialsUpdate, MemberUpdate } from '../../libs/dto/member/member.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { Message } from '../../libs/enums/common.enum';
@@ -18,7 +20,10 @@ import { getSerialForImage, isValidImage, shapeIntoMongoObjectId } from '../../l
 
 @Resolver()
 export class MemberResolver {
-	constructor(private readonly memberService: MemberService) {}
+	constructor(
+		private readonly memberService: MemberService,
+		private readonly socialAuthService: SocialAuthService,
+	) {}
 
 	@Mutation(() => Member)
 	public async signup(@Args('input') input: MemberInput): Promise<Member> {
@@ -30,6 +35,18 @@ export class MemberResolver {
 	public async login(@Args('input') input: LoginInput): Promise<Member> {
 		console.log('Mutation: login');
 		return await this.memberService.login(input);
+	}
+
+	@Mutation(() => Member)
+	public async socialLogin(@Args('input') input: SocialLoginInput): Promise<Member> {
+		console.log('Mutation: socialLogin');
+		return await this.memberService.socialLogin(input);
+	}
+
+	@Query(() => AuthProviders)
+	public async getAuthProviders(): Promise<AuthProviders> {
+		console.log('Query: getAuthProviders');
+		return await this.socialAuthService.getProviders();
 	}
 
 	@UseGuards(AuthGuard)
