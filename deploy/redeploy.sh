@@ -31,6 +31,9 @@ ssh "$HOST" "echo $SUDO_PW | sudo -S -p '' -u muhammad -H bash -c '
     if [ -f /tmp/modu-uploads.tgz ]; then tar -xzf /tmp/modu-uploads.tgz; fi
     mkdir -p uploads/member uploads/product uploads/article
     cd deploy && docker compose up -d --build 2>&1 | tail -15
+    # nginx keeps the old containers addresses and the old nginx.conf (tar swapped the
+    # bind-mounted file) until it is recreated, which compose skips when its image is unchanged
+    docker compose up -d --force-recreate --no-deps proxy 2>&1 | tail -1
 '; echo $SUDO_PW | sudo -S -p '' rm -f /tmp/modu-src.tgz /tmp/modu-uploads.tgz"
 
 echo "== smoke test"
