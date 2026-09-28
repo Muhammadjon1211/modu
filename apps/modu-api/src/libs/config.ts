@@ -53,6 +53,20 @@ export const RECOMMEND_CACHE_TTL_MS = 10 * 60 * 1000;
 export const RECOMMEND_BADGE_MAX = 8;
 export const RECOMMEND_BADGE_SHARE = 0.25;
 
+/**
+ * Virtual try-on — the free IDM-VTON Space on Hugging Face (non-commercial license).
+ * The model only dresses the upper body, so only these categories offer it.
+ */
+export const TRYON_SPACE_URL = 'https://yisol-idm-vton.hf.space';
+/** the Space's `/tryon` endpoint, as listed by its /config dependencies */
+export const TRYON_FN_INDEX = 2;
+export const TRYON_CATEGORIES: ProductCategory[] = [ProductCategory.TOP, ProductCategory.OUTERWEAR];
+/** a run takes ~25 s; the rest covers a queue on the shared GPU */
+export const TRYON_TIMEOUT_MS = 120 * 1000;
+export const TRYON_DENOISE_STEPS = 30;
+/** per member, per rolling hour — the Space's free GPU quota is shared by everyone */
+export const TRYON_HOURLY_LIMIT = 10;
+
 /** Boolean facets — the "options" checkbox group. */
 export const availableOptions = ['productOnSale', 'productFreeShipping', 'productNew'];
 

@@ -13,6 +13,7 @@ import { NoticeModule } from './notice/notice.module';
 import { AddressModule } from './address/address.module';
 import { PaymentModule } from './payment/payment.module';
 import { RecommendationModule } from './recommendation/recommendation.module';
+import { TryOnModule } from './try-on/try-on.module';
 
 /** Pure aggregator — AppModule imports this, never an individual feature. */
 @Module({
@@ -31,6 +32,7 @@ import { RecommendationModule } from './recommendation/recommendation.module';
 		AddressModule,
 		PaymentModule,
 		RecommendationModule,
+		TryOnModule,
 	],
 })
 export class ComponentsModule {}

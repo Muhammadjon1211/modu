@@ -51,6 +51,13 @@ export enum Message {
 	RETURN_QUANTITY_EXCEEDED = 'Return quantity exceeds what is left of this purchase!',
 	RETURN_NOT_UPDATABLE = 'This return can no longer move to that status!',
 	RETURN_NOT_CANCELLABLE = 'Only a pending return request can be cancelled!',
+
+	/** try-on */
+	TRYON_NOT_AVAILABLE = 'Try-on is available for tops and outerwear only!',
+	TRYON_BUSY = 'Your previous try-on is still running!',
+	TRYON_LIMIT_REACHED = 'Try-on limit reached, please try again in an hour!',
+	TRYON_QUOTA_EXCEEDED = 'The try-on service is busy right now, please try again later!',
+	TRYON_FAILED = 'Try-on failed, please try another photo!',
 }
 
 export enum Direction {
