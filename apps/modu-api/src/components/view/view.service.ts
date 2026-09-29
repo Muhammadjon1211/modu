@@ -7,7 +7,7 @@ import { OrdinaryInquiry } from '../../libs/dto/member/member.input';
 import { Products } from '../../libs/dto/product/product';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { T } from '../../libs/types/common';
-import { lookupVisit } from '../../libs/config';
+import { lookupAuthMemberLiked, lookupVisit } from '../../libs/config';
 
 @Injectable()
 export class ViewService {
@@ -54,6 +54,9 @@ export class ViewService {
 							{ $limit: limit },
 							lookupVisit,
 							{ $unwind: '$visitedProduct.memberData' },
+							// the viewer's own like, so the card's heart shows their state, not the product's count
+							lookupAuthMemberLiked(memberId, '$visitedProduct._id'),
+							{ $addFields: { 'visitedProduct.meLiked': '$meLiked' } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
